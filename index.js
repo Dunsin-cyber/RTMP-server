@@ -1,8 +1,10 @@
 const express = require("express");
 const { spawn } = require("child_process");
+const cors = require("cors");
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 app.post("/start-stream", (req, res) => {
   const { stream_server, stream_key } = req.body;
