@@ -75,13 +75,18 @@ server.listen(3001, () => {
 const { spawn } = require("child_process");
 const express = require("express");
 const path = require("path");
+const cors = require("cors");
+const bodyParser = require("body-parser");
 
 const app = express();
 const PORT = 3001;
-const STREAM_KEY = "I24shiHKgxia6pHVC5FEaxO22Y6gkaIe";
-const RTMP_SERVER = "rtmp://34.173.223.115:1935/live";
+// const STREAM_KEY = "vTt0eSMQQJxAf264qFlto0AlTPGyn7dw";
+// const RTMP_SERVER = "rtmp://34.173.223.115:1935/live";
 const HLS_DIR = path.join(__dirname, "hls"); // Directory to save HLS files
 
+app.use(cors());
+app.use(bodyParser.json());
+app.use(express.json());
 // Create the HLS directory if it doesn't exist
 const fs = require("fs");
 if (!fs.existsSync(HLS_DIR)) {
@@ -89,26 +94,40 @@ if (!fs.existsSync(HLS_DIR)) {
 }
 
 app.post("/start-stream", (req, res) => {
-  const streamKey = req.body.stream_key;
-
-  if (streamKey !== STREAM_KEY) {
-    return res.status(403).send("Forbidden");
-  }
+  const { stream_key, stream_server } = req.body;
 
   // FFmpeg command to convert RTMP to HLS
   const ffmpeg = spawn("ffmpeg", [
+    "-f",
+    "lavfi",
     "-i",
-    `${RTMP_SERVER}/${streamKey}`,
-    "-codec: copy",
-    "-start_number",
-    "0",
+    "anullsrc",
+    "-f",
+    "x11grab",
+    "-probesize",
+    "10M",
+    "-thread_queue_size",
+    "1024",
+    "-i",
+    ":0.0",
+    "-vcodec",
+    "libx264",
+    "-preset",
+    "ultrafast",
+    "-f",
+    "flv",
+    `${stream_server}/${stream_key}`,
+    "-f",
+    "hls",
     "-hls_time",
     "10",
     "-hls_list_size",
-    "0",
-    "-f",
-    "hls",
+    "6",
+    "-hls_flags",
+    "delete_segments",
     path.join(HLS_DIR, "playlist.m3u8"),
+    "-loglevel",
+    "debug",
   ]);
 
   ffmpeg.stdout.on("data", (data) => {
@@ -126,8 +145,8 @@ app.post("/start-stream", (req, res) => {
   res.status(200).send("Streaming started");
 });
 
-// Serve HLS files
-app.use("/hls", express.static(HLS_DIR));
+// Serve static files (HLS segments and playlist)
+app.use("/hls", express.static(path.join(__dirname, "hls")));
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
